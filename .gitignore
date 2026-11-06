@@ -1,0 +1,23 @@
+# Dependencies and build output
+node_modules/
+dist/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Secrets: never commit keys or credentials
+.env
+.env.*
+*.pem
+*.key
+secrets/
+xorview-settings.json
+
+# Test scratch dirs (removed after test runs)
+.test-tmp-*
+
+# Local scratch: verification probes, caches, temp downloads (never committed)
+.tmp/
+.npm-cache/

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self';" />
+  <title>XorView</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-theme="dark">
+  <div id="app">
+    <header id="titlebar">
+      <span id="title">XorView</span>
+      <span id="status-dot" class="idle" title="listening state"></span>
+      <div class="win-btns">
+        <button id="btn-click" title="Toggle click-through">Click-through</button>
+        <button id="btn-hide" title="Hide overlay (global hotkey still works)">Hide</button>
+      </div>
+    </header>
+
+    <div id="key-banner" hidden>
+      <span>No API key configured. Transcription and suggestions need one.</span>
+      <button id="btn-banner-settings">Open settings</button>
+    </div>
+
+    <nav id="tabs" role="tablist">
+      <button data-tab="transcript" class="active" role="tab">Transcript</button>
+      <button data-tab="context" role="tab">Context</button>
+      <button data-tab="suggestions" role="tab">Suggestions</button>
+      <button data-tab="settings" role="tab">Settings</button>
+    </nav>
+
+    <main>
+      <section id="tab-transcript" class="pane active" role="tabpanel">
+        <div class="row">
+          <button id="btn-listen">Start listening</button>
+          <span id="listen-state">Paused</span>
+        </div>
+        <ul id="transcript-list" aria-live="polite"></ul>
+        <div class="row">
+          <button id="btn-clear-transcript" class="ghost">Clear transcript</button>
+        </div>
+      </section>
+
+      <section id="tab-context" class="pane" role="tabpanel">
+        <div class="row">
+          <button id="btn-capture">Capture now</button>
+          <span id="capture-state">No captures yet</span>
+        </div>
+        <img id="context-img" alt="Latest screen context capture" hidden />
+        <p id="context-note" class="muted">Screen captures appear here on your interval.</p>
+        <ul id="context-list"></ul>
+      </section>
+
+      <section id="tab-suggestions" class="pane" role="tabpanel">
+        <div class="row">
+          <button id="btn-suggest">Suggest</button>
+          <label class="check"><input type="checkbox" id="auto-suggest" /> Auto-refresh</label>
+        </div>
+        <p id="suggest-state" class="muted">Press Suggest to get answer ideas.</p>
+        <div id="suggestions"></div>
+      </section>
+
+      <section id="tab-settings" class="pane" role="tabpanel">
+        <p id="hotkey-error" class="error" hidden></p>
+        <form id="settings-form">
+          <h3>General</h3>
+          <label>Global hide/show hotkey
+            <input id="set-hotkey" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="check"><input id="set-autostart" type="checkbox" /> Start at login</label>
+          <label>Theme
+            <select id="set-theme"><option value="dark">Dark</option><option value="light">Light</option></select>
+          </label>
+          <label>Overlay opacity (0.3 - 1)
+            <input id="set-opacity" type="number" min="0.3" max="1" step="0.05" />
+          </label>
+
+          <h3>Microphone</h3>
+          <label>Mic device
+            <select id="set-mic"><option value="default">Default microphone</option></select>
+          </label>
+          <label>Transcription language
+            <input id="set-language" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <h3>Screen context</h3>
+          <label>Capture interval (seconds, 5 - 600)
+            <input id="set-interval" type="number" min="5" max="600" step="1" />
+          </label>
+          <label class="check"><input id="set-screen-paused" type="checkbox" /> Pause scheduled captures</label>
+
+          <h3>Providers (OpenAI-compatible)</h3>
+          <label>Transcription endpoint
+            <input id="set-tbase" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Transcription model
+            <input id="set-tmodel" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Transcription API key <span id="tkey-state" class="muted"></span>
+            <input id="set-tkey" type="password" autocomplete="off" placeholder="Leave blank to keep stored key" />
+          </label>
+          <div class="row"><button type="button" id="btn-test-t">Test transcription</button></div>
+          <label>Chat endpoint
+            <input id="set-cbase" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Chat model
+            <input id="set-cmodel" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Chat API key <span id="ckey-state" class="muted"></span>
+            <input id="set-ckey" type="password" autocomplete="off" placeholder="Leave blank to keep stored key" />
+          </label>
+          <div class="row"><button type="button" id="btn-test-c">Test chat</button></div>
+          <p class="muted">Keys can also come from environment variables. They are never written to the repo.</p>
+
+          <h3>Suggestions &amp; data</h3>
+          <label>Suggestion mode
+            <select id="set-suggest-mode"><option value="manual">Manual</option><option value="auto">Auto</option></select>
+          </label>
+          <label>Transcript buffer size (10 - 1000)
+            <input id="set-buffer" type="number" min="10" max="1000" step="1" />
+          </label>
+
+          <div class="row">
+            <button type="submit">Save settings</button>
+            <button type="button" id="btn-clear-data" class="ghost">Clear local data</button>
+          </div>
+          <p id="settings-state" class="muted"></p>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

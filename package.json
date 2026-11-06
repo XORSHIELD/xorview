@@ -1,0 +1,56 @@
+{
+  "name": "xorview",
+  "version": "0.1.0",
+  "private": true,
+  "description": "XorView v1: original-code Electron overlay assistant (live mic transcription, screen context, AI suggestions).",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XORSHIELD/xorview.git"
+  },
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "lint": "node scripts/lint.js",
+    "build": "node scripts/build.js",
+    "dist": "electron-builder --publish never",
+    "test": "node --test core/settings.test.js core/providers.test.js core/screen.test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.xorview.app",
+    "productName": "XorView",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**",
+      "renderer/**",
+      "core/**",
+      "assets/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
