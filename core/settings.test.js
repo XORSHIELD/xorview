@@ -287,3 +287,22 @@ test('mergeSettings honors profile keys', () => {
   assert.equal(merged.candidateName, 'Ada');
   assert.equal(merged.jobDescription, 'Backend role');
 });
+
+test('validateSettings covers the CV file name', () => {
+  const bad = { ...settings.defaults(), cvFileName: 'x'.repeat(256) };
+  const result = settings.validateSettings(bad);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.cvFileName);
+  const nonString = settings.validateSettings({ ...settings.defaults(), cvFileName: 42 });
+  assert.equal(nonString.ok, false);
+  assert.ok(nonString.errors.cvFileName);
+  const good = settings.validateSettings({ ...settings.defaults(), cvFileName: 'Ada-CV.pdf' });
+  assert.equal(good.ok, true);
+});
+
+test('saveSettings round-trips the CV file name', () => {
+  const dir = makeTempDir();
+  const input = { ...settings.defaults(), cvFileName: 'Ada-CV.pdf' };
+  assert.equal(settings.saveSettings(dir, input).ok, true);
+  assert.equal(settings.loadSettings(dir).cvFileName, 'Ada-CV.pdf');
+});

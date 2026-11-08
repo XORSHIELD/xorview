@@ -17,7 +17,7 @@
     "dist": "electron-builder --publish never",
     "smoke": "node scripts/smoke.js",
     "make-icon": "node scripts/make-icon.js",
-    "test": "node --test core/settings.test.js core/providers.test.js core/screen.test.js core/audio.test.js core/suggest.test.js core/profile.test.js core/voicestudio.test.js scripts/scripts.test.js test/main.test.js test/renderer.test.js"
+    "test": "node --test core/settings.test.js core/providers.test.js core/screen.test.js core/audio.test.js core/suggest.test.js core/profile.test.js core/cv.test.js core/voicestudio.test.js scripts/scripts.test.js test/main.test.js test/renderer.test.js"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -39,6 +39,10 @@
       "core/**",
       "assets/**",
       "package.json",
+      "node_modules/pdf-parse/index.js",
+      "node_modules/pdf-parse/package.json",
+      "node_modules/pdf-parse/lib/pdf-parse.js",
+      "node_modules/pdf-parse/lib/pdf.js/v1.10.100/**",
       "!**/*.test.js",
       "!**/.test-tmp-*"
     ],
@@ -58,5 +62,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true
     }
+  },
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
   }
 }

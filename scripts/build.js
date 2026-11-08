@@ -26,6 +26,8 @@ const REQUIRED_FILES = [
   'core/suggest.js',
   'core/voicestudio.js',
   'core/profile.js',
+  'core/cv.js',
+  'node_modules/pdf-parse/package.json',
   'scripts/smoke.js',
   'assets/tray.png',
   'assets/icon.png',

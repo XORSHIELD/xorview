@@ -39,7 +39,8 @@ Full build spec: [SPEC.md](SPEC.md).
   rank/dedup, per-slot missing-key/offline states, and optional grounding
   in your confirmed candidate profile (name, headline, résumé facts,
   skills, STAR stories, target job description) with "From your profile"
-  / "General" card labels.
+  / "General" card labels. A PDF CV upload fills name, facts, and
+  skills automatically (parsed locally, page-capped).
 - Settings: hotkey, autostart, start-hidden, mic, language, clip length,
   VAD gate, capture interval, provider endpoints/models, suggestion mode,
   interview type, theme, opacity, buffer size, transcript log, and an
@@ -122,7 +123,7 @@ xorview/              (repo root)
   electron/main.js   window, tray, hotkey, capture, IPC
   electron/preload.js  minimal contextBridge surface (live channels only)
   renderer/          overlay UI (index.html, app.js, styles.css)
-  core/              settings, providers, screen, audio, suggest, voicestudio, profile (+ tests)
+  core/              settings, providers, screen, audio, suggest, voicestudio, profile, cv (+ tests)
   scripts/           lint, build gate, icon generator, smoke (+ tests)
   test/              main-process stub harness, renderer DOM harness
   assets/            generated original icons (tray.png, icon.png, icon.ico)

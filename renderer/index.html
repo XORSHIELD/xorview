@@ -135,6 +135,11 @@
 
           <h3>Candidate profile</h3>
           <label class="check"><input id="set-profile-enabled" type="checkbox" /> Ground answers in my profile</label>
+          <label>Upload CV (PDF, fills the fields below)
+            <input id="set-cv-file" type="file" accept=".pdf,application/pdf" />
+          </label>
+          <input id="set-cv-name" type="hidden" value="" />
+          <p id="cv-state" class="muted">No CV uploaded — fields fill from manual entry.</p>
           <label>Display name
             <input id="set-profile-name" type="text" autocomplete="off" spellcheck="false" placeholder="Ada Lovelace" />
           </label>

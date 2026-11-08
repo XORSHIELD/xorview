@@ -52,6 +52,7 @@ class FakeElement {
     this.src = '';
     this.disabled = false;
     this.title = '';
+    this.files = [];
     this.dataset = {};
     this.attributes = {};
     this.classList = new FakeClassList();
@@ -224,12 +225,14 @@ async function setup(overrides = {}) {
     setFocusable: [],
     suggest: 0,
     transcribe: 0,
+    uploadCv: [],
     appended: []
   };
   const bridgeListeners = {};
   const settingsValue = { ...DEFAULT_SETTINGS, ...(overrides.settings || {}) };
   let transcribeImpl = overrides.transcribeImpl || (async () => ({ ok: true, text: 'hello world' }));
   let suggestImpl = overrides.suggestImpl || (async () => ({ ok: true, text: 'line one' }));
+  let uploadCvImpl = overrides.uploadCvImpl || (async () => ({ ok: true, fileName: 'cv.pdf', numpages: 1, fill: {} }));
   const bridge = {
     getSettings: async () => ({ ...settingsValue }),
     saveSettings: async (s) => ({ ok: true, settings: { ...settingsValue, ...s } }),
@@ -241,6 +244,10 @@ async function setup(overrides = {}) {
     suggest: async (payload) => {
       calls.suggest += 1;
       return suggestImpl(payload);
+    },
+    uploadCv: async (payload) => {
+      calls.uploadCv.push(payload);
+      return uploadCvImpl(payload);
     },
     captureNow: async () => ({ ok: true }),
     setListening: async (on) => {
@@ -337,6 +344,9 @@ async function setup(overrides = {}) {
     },
     setSuggestImpl: (fn) => {
       suggestImpl = fn;
+    },
+    setUploadCvImpl: (fn) => {
+      uploadCvImpl = fn;
     },
     activeTab: () => {
       const tab = tabs.find((t) => t.classList.contains('active'));
@@ -625,4 +635,41 @@ test('suggestion badges mark profile-grounded cards', async () => {
   assert.match(cards[0].children[1].className, /you/);
   assert.equal(cards[1].children[1].textContent, 'General');
   assert.equal(cards[2].children.length, 2);
+});
+
+test('CV upload fills fields from the fill and leaves other text alone', async () => {
+  const ctx = await setup({
+    uploadCvImpl: async () => ({
+      ok: true,
+      fileName: 'Ada-CV.pdf',
+      numpages: 2,
+      fill: { candidateName: 'Ada', resumeFacts: 'Built billing', keySkills: '' }
+    })
+  });
+  ctx.els['set-profile-skills'].value = 'Keep me';
+  ctx.els['set-cv-file'].files = [{ name: 'Ada-CV.pdf', size: 100 }];
+  ctx.els['set-cv-file'].fire('change');
+  await ctx.flush();
+  assert.equal(ctx.calls.uploadCv.length, 1);
+  assert.equal(ctx.calls.uploadCv[0].fileName, 'Ada-CV.pdf');
+  assert.match(ctx.calls.uploadCv[0].dataBase64, /aGk=/);
+  assert.equal(ctx.els['set-profile-name'].value, 'Ada');
+  assert.equal(ctx.els['set-profile-facts'].value, 'Built billing');
+  assert.equal(ctx.els['set-profile-skills'].value, 'Keep me');
+  assert.equal(ctx.els['set-cv-name'].value, 'Ada-CV.pdf');
+  assert.match(ctx.els['cv-state'].textContent, /Uploaded: Ada-CV\.pdf/);
+  assert.match(ctx.els['cv-state'].textContent, /2 pages/);
+});
+
+test('CV upload errors render inline without touching fields', async () => {
+  const ctx = await setup({
+    uploadCvImpl: async () => ({ ok: false, error: { code: 'empty', message: 'No readable text found' } })
+  });
+  ctx.els['set-profile-name'].value = 'Typed';
+  ctx.els['set-cv-file'].files = [{ name: 'scan.pdf', size: 100 }];
+  ctx.els['set-cv-file'].fire('change');
+  await ctx.flush();
+  assert.equal(ctx.els['set-profile-name'].value, 'Typed');
+  assert.equal(ctx.els['set-cv-name'].value, '');
+  assert.match(ctx.els['cv-state'].textContent, /No readable text/);
 });

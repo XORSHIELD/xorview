@@ -42,6 +42,8 @@ test('secret scan stays quiet on clean code', () => {
 test('lint module has no import side effects', () => {
   assert.ok(Array.isArray(lint.JS_FILES));
   assert.ok(lint.JS_FILES.includes('core/suggest.js'));
+  assert.ok(lint.JS_FILES.includes('core/profile.js'));
+  assert.ok(lint.JS_FILES.includes('core/cv.js'));
   assert.ok(lint.JS_FILES.includes('scripts/smoke.js'));
 });
 
@@ -72,6 +74,9 @@ test('build validatePackage requires nsis, icon, and test exclusion', () => {
 test('build module has no import side effects', () => {
   assert.ok(Array.isArray(build.REQUIRED_FILES));
   assert.ok(build.REQUIRED_FILES.includes('core/suggest.js'));
+  assert.ok(build.REQUIRED_FILES.includes('core/profile.js'));
+  assert.ok(build.REQUIRED_FILES.includes('core/cv.js'));
+  assert.ok(build.REQUIRED_FILES.includes('node_modules/pdf-parse/package.json'));
 });
 
 test('make-icon has no import side effects and writes icons on main()', () => {

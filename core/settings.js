@@ -55,7 +55,8 @@ const DEFAULTS = Object.freeze({
   resumeFacts: '',
   keySkills: '',
   starStories: '',
-  jobDescription: ''
+  jobDescription: '',
+  cvFileName: ''
 });
 
 const KNOWN_KEYS = Object.keys(DEFAULTS);
@@ -189,6 +190,11 @@ function validateSettings(s) {
   }
   if (typeof s.profileEnabled !== 'boolean') {
     errors.profileEnabled = 'Profile opt-in must be true or false.';
+  }
+  if (typeof s.cvFileName !== 'string') {
+    errors.cvFileName = 'CV file name must be a string.';
+  } else if (s.cvFileName.length > 255) {
+    errors.cvFileName = 'CV file name must be at most 255 characters.';
   }
   for (const field of Object.keys(PROFILE_TEXT_LIMITS)) {
     const max = PROFILE_TEXT_LIMITS[field];

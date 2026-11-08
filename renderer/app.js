@@ -595,6 +595,10 @@
     $('set-profile-skills').value = s.keySkills || '';
     $('set-profile-stories').value = s.starStories || '';
     $('set-profile-jd').value = s.jobDescription || '';
+    $('set-cv-name').value = s.cvFileName || '';
+    $('cv-state').textContent = s.cvFileName
+      ? `Uploaded: ${s.cvFileName}`
+      : 'No CV uploaded — fields fill from manual entry.';
     $('tkey-state').textContent = s.transcribeProvider === 'voicestudio'
       ? '(not needed for local VoiceStudio)'
       : (s.hasTranscribeKey ? '(configured)' : '(missing)');
@@ -635,8 +639,49 @@
       resumeFacts: $('set-profile-facts').value.trim(),
       keySkills: $('set-profile-skills').value.trim(),
       starStories: $('set-profile-stories').value.trim(),
-      jobDescription: $('set-profile-jd').value.trim()
+      jobDescription: $('set-profile-jd').value.trim(),
+      cvFileName: $('set-cv-name').value
     };
+  }
+
+  /** CV upload: read the PDF here, parse it in main, overwrite filled fields. */
+  function handleCvFile() {
+    const input = $('set-cv-file');
+    const file = input && input.files && input.files[0];
+    if (!file) return;
+    const state = $('cv-state');
+    state.textContent = `Reading ${file.name}…`;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = String(reader.result || '');
+        const dataBase64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : '';
+        const res = await bridge.uploadCv({ fileName: file.name, dataBase64 });
+        const safe = SuggestLib
+          ? SuggestLib.safeResponse(res)
+          : { ok: !!(res && res.ok), code: '', message: '' };
+        if (!safe.ok) {
+          state.textContent = formatProviderError('CV upload', safe.code, safe.message);
+          return;
+        }
+        const fill = (res && res.fill) || {};
+        if (fill.candidateName) $('set-profile-name').value = fill.candidateName;
+        if (fill.resumeFacts) $('set-profile-facts').value = fill.resumeFacts;
+        if (fill.keySkills) $('set-profile-skills').value = fill.keySkills;
+        $('set-cv-name').value = (res && res.fileName) || file.name;
+        const pages = res && res.numpages ? ` (${res.numpages} page${res.numpages === 1 ? '' : 's'})` : '';
+        state.textContent = `Uploaded: ${$('set-cv-name').value}${pages} — review the fields, then Save settings.`;
+      } catch (err) {
+        state.textContent = `CV upload failed: ${(err && err.message) || err}`;
+      } finally {
+        input.value = '';
+      }
+    };
+    reader.onerror = () => {
+      state.textContent = 'CV upload failed: could not read that file.';
+      input.value = '';
+    };
+    reader.readAsDataURL(file);
   }
 
   function applyTheme(theme) {
@@ -746,6 +791,7 @@
     });
 
     $('btn-suggest').addEventListener('click', () => void requestSuggestions());
+    $('set-cv-file').addEventListener('change', () => void handleCvFile());
     $('auto-suggest').addEventListener('change', applyAutoMode);
 
     $('settings-form').addEventListener('submit', async (event) => {

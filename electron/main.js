@@ -37,6 +37,7 @@ const voicestudio = require('../core/voicestudio');
 const { capturePrimaryScreen } = require('../core/screen');
 const suggest = require('../core/suggest');
 const profile = require('../core/profile');
+const cv = require('../core/cv');
 
 const SMOKE = process.argv.includes('--smoke') || process.env.XORVIEW_SMOKE === '1';
 const SMOKE_TIMEOUT_MS = Number(process.env.XORVIEW_SMOKE_TIMEOUT_MS) || 2500;
@@ -530,6 +531,14 @@ function setupIpc() {
         messages
       });
       return { ok: true, text: result.text };
+    } catch (err) {
+      return { ok: false, error: errorPayload(err) };
+    }
+  });
+
+  ipcMain.handle('xorview:cv-upload', async (_event, payload) => {
+    try {
+      return await cv.parseCvUpload(payload);
     } catch (err) {
       return { ok: false, error: errorPayload(err) };
     }

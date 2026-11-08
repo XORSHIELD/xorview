@@ -147,6 +147,7 @@ xorview/
     settings.js    # settings load/save, env fallback, validation, safe storage
     suggest.js     # NEW: fusion, question detection, prompt build, rank/dedup
     profile.js     # candidate-profile parsing + confirmed-facts prompt block
+    cv.js          # CV PDF upload parsing + profile auto-fill
   scripts/
     build.js       # guarded packaging checks (fixes defect 41)
     lint.js        # secret scan incl. sk-/OpenAI patterns (fixes defect 12)
@@ -209,9 +210,9 @@ xorview/
    - Two-stage rank: cheap candidate generation, small-model rerank over top ~50, MMR dedup; pinned answers supported; conditional retrieval only when external facts are needed.
    - Render suggestion cards; copy-to-clipboard per suggestion.
    - Explicit missing-key/offline states per provider slot.
-   - Optional candidate-profile grounding: when enabled, the confirmed profile (name, headline, résumé facts, skills, STAR stories, target job description) is fused into the prompt with an anti-hallucination instruction, and each card is labeled "From your profile" or "General".
+   - Optional candidate-profile grounding: when enabled, the confirmed profile (name, headline, résumé facts, skills, STAR stories, target job description) is fused into the prompt with an anti-hallucination instruction, and each card is labeled "From your profile" or "General". A PDF CV upload (parsed locally via pdf-parse, 10-page cap, 8 MB cap) auto-fills name, facts, and skills.
 7. Settings.
-   - Hotkey remap, autostart toggle, mic device select, transcription language, clip length + VAD sensitivity, screen-capture interval, provider endpoints + model names, suggestion mode (manual/auto), interview type, candidate profile (name, headline, résumé facts, skills, STAR stories, job description), theme/opacity, data retention (buffer size, log file, clear buttons), start-hidden.
+   - Hotkey remap, autostart toggle, mic device select, transcription language, clip length + VAD sensitivity, screen-capture interval, provider endpoints + model names, suggestion mode (manual/auto), interview type, candidate profile (name, headline, résumé facts, skills, STAR stories, job description, CV file name), theme/opacity, data retention (buffer size, log file, clear buttons), start-hidden.
    - Validation with inline errors; test-connection button per slot with coded errors; keys trimmed on save (fixes defect 29); masked inputs; never logged.
 
 ## 6. Provider design (configurable OpenAI-compatible endpoints)

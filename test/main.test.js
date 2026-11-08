@@ -492,3 +492,30 @@ test('suggest omits the profile block when grounding is off', async () => {
     providers.chatCompletion = original;
   }
 });
+
+test('cv-upload parses a CV through core/cv', async () => {
+  await main.init();
+  const lib = require('../core/cv');
+  const original = lib.parseCvUpload;
+  let seen = null;
+  lib.parseCvUpload = async (payload) => {
+    seen = payload;
+    return { ok: true, fileName: 'cv.pdf', numpages: 2, fill: { candidateName: 'Ada' } };
+  };
+  try {
+    const res = await stub.handlers['xorview:cv-upload']({}, { fileName: 'cv.pdf', dataBase64: 'eA==' });
+    assert.equal(res.ok, true);
+    assert.equal(res.fill.candidateName, 'Ada');
+    assert.equal(res.numpages, 2);
+    assert.equal(seen.fileName, 'cv.pdf');
+  } finally {
+    lib.parseCvUpload = original;
+  }
+});
+
+test('cv-upload surfaces parse errors with codes', async () => {
+  await main.init();
+  const res = await stub.handlers['xorview:cv-upload']({}, { fileName: 'cv.txt', dataBase64: 'eA==' });
+  assert.equal(res.ok, false);
+  assert.equal(res.error.code, 'bad-request');
+});

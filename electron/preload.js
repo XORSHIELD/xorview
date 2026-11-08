@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('xorview', {
   testConnection: (slot) => ipcRenderer.invoke('xorview:test-connection', slot),
   transcribeAudio: (payload) => ipcRenderer.invoke('xorview:transcribe-audio', payload),
   suggest: (payload) => ipcRenderer.invoke('xorview:suggest', payload),
+  uploadCv: (payload) => ipcRenderer.invoke('xorview:cv-upload', payload),
   captureNow: () => ipcRenderer.invoke('xorview:capture-now'),
   setListening: (on) => ipcRenderer.invoke('xorview:set-listening', on),
   setClickThrough: (on) => ipcRenderer.invoke('xorview:set-click-through', on),
