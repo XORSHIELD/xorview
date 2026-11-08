@@ -21,82 +21,121 @@ const JS_FILES = [
   'core/providers.js',
   'core/screen.js',
   'core/audio.js',
+  'core/suggest.js',
+  'core/voicestudio.js',
+  'core/profile.js',
   'core/settings.test.js',
   'core/providers.test.js',
   'core/screen.test.js',
+  'core/audio.test.js',
+  'core/suggest.test.js',
+  'core/voicestudio.test.js',
+  'core/profile.test.js',
   'scripts/lint.js',
   'scripts/build.js',
-  'scripts/make-icon.js'
+  'scripts/make-icon.js',
+  'scripts/smoke.js',
+  'scripts/scripts.test.js',
+  'test/main.test.js',
+  'test/renderer.test.js'
 ];
 
 const SECRET_FILE_NAMES = ['.env', '.env.local', 'secrets.json'];
 
+// Built from fragments so this file's own source never matches the scan.
 const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /AKIA[0-9A-Z]{16}/
+  /AKIA[0-9A-Z]{16}/,
+  new RegExp('sk-' + '[A-Za-z0-9-_]{20,}'),
+  new RegExp('xox' + '[abop]-' + '[A-Za-z0-9-]{8,}'),
+  new RegExp('api' + '[_-]?key' + '\\s*[:=]\\s*["\'][^"\'\\s]{8,}["\']', 'i'),
+  new RegExp('["\']?secret' + '[_-]?key' + '["\']?\\s*[:=]\\s*["\'][^"\'\\s]{8,}["\']', 'i')
 ];
 
-let failures = 0;
-
-function fail(message) {
-  failures += 1;
-  console.error(`lint FAIL: ${message}`);
+/** Return the patterns matching text (exported for unit tests). */
+function scanText(text) {
+  return SECRET_PATTERNS.filter((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(String(text || ''));
+  });
 }
 
 function checkSyntax() {
+  const failures = [];
   for (const rel of JS_FILES) {
     const full = path.join(ROOT, rel);
     if (!fs.existsSync(full)) {
-      fail(`missing file ${rel}`);
+      failures.push(`missing file ${rel}`);
       continue;
     }
     try {
       execFileSync(process.execPath, ['--check', full], { stdio: 'pipe' });
     } catch {
-      fail(`syntax error in ${rel}`);
+      failures.push(`syntax error in ${rel}`);
     }
   }
+  return failures;
 }
 
 function checkSecrets() {
-  const scanTargets = [...JS_FILES, 'renderer/index.html', 'package.json', 'README.md'];
+  const failures = [];
+  const scanTargets = [...JS_FILES, 'renderer/index.html', 'package.json', 'README.md', 'SPEC.md'];
   for (const rel of scanTargets) {
     const full = path.join(ROOT, rel);
     if (!fs.existsSync(full)) continue;
     const text = fs.readFileSync(full, 'utf8');
-    for (const pattern of SECRET_PATTERNS) {
-      if (pattern.test(text)) {
-        fail(`possible committed secret in ${rel} (${pattern})`);
-      }
+    for (const pattern of scanText(text)) {
+      failures.push(`possible committed secret in ${rel} (${pattern})`);
     }
   }
   for (const name of SECRET_FILE_NAMES) {
     if (fs.existsSync(path.join(ROOT, name))) {
-      fail(`secret file present in repo: ${name}`);
+      failures.push(`secret file present in repo: ${name}`);
     }
   }
+  return failures;
 }
 
 function checkGitignore() {
+  const failures = [];
   const full = path.join(ROOT, '.gitignore');
   if (!fs.existsSync(full)) {
-    fail('missing .gitignore');
-    return;
+    failures.push('missing .gitignore');
+    return failures;
   }
   const text = fs.readFileSync(full, 'utf8');
   for (const required of ['node_modules', '.env']) {
     if (!text.includes(required)) {
-      fail(`.gitignore does not cover "${required}"`);
+      failures.push(`.gitignore does not cover "${required}"`);
     }
   }
+  return failures;
 }
 
-checkSyntax();
-checkSecrets();
-checkGitignore();
-
-if (failures > 0) {
-  console.error(`lint: ${failures} failure(s)`);
-  process.exit(1);
+function run() {
+  const failures = [...checkSyntax(), ...checkSecrets(), ...checkGitignore()];
+  for (const failure of failures) {
+    console.error(`lint FAIL: ${failure}`);
+  }
+  if (failures.length > 0) {
+    console.error(`lint: ${failures.length} failure(s)`);
+    process.exit(1);
+  }
+  console.log(`lint: OK (${JS_FILES.length} files checked, no secrets found)`);
 }
-console.log(`lint: OK (${JS_FILES.length} files checked, no secrets found)`);
+
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  ROOT,
+  JS_FILES,
+  SECRET_FILE_NAMES,
+  SECRET_PATTERNS,
+  scanText,
+  checkSyntax,
+  checkSecrets,
+  checkGitignore,
+  run
+};

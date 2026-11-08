@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self';" />
-  <title>XorView</title>
+  <title>Quick Notes</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body data-theme="dark">
   <div id="app">
     <header id="titlebar">
-      <span id="title">XorView</span>
+      <span id="title">Quick Notes</span>
       <span id="status-dot" class="idle" title="listening state"></span>
       <div class="win-btns">
         <button id="btn-click" title="Toggle click-through">Click-through</button>
@@ -19,7 +19,7 @@
     </header>
 
     <div id="key-banner" hidden>
-      <span>No API key configured. Transcription and suggestions need one.</span>
+      <span id="key-banner-text">No API key configured.</span>
       <button id="btn-banner-settings">Open settings</button>
     </div>
 
@@ -35,6 +35,7 @@
         <div class="row">
           <button id="btn-listen">Start listening</button>
           <span id="listen-state">Paused</span>
+          <span id="queue-depth" class="muted" title="Clips waiting for transcription"></span>
         </div>
         <ul id="transcript-list" aria-live="polite"></ul>
         <div class="row">
@@ -69,6 +70,7 @@
             <input id="set-hotkey" type="text" autocomplete="off" spellcheck="false" />
           </label>
           <label class="check"><input id="set-autostart" type="checkbox" /> Start at login</label>
+          <label class="check"><input id="set-start-hidden" type="checkbox" /> Start hidden (tray only)</label>
           <label>Theme
             <select id="set-theme"><option value="dark">Dark</option><option value="light">Light</option></select>
           </label>
@@ -82,6 +84,13 @@
           </label>
           <label>Transcription language
             <input id="set-language" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Clip length (seconds, 2 - 30)
+            <input id="set-clip" type="number" min="2" max="30" step="1" />
+          </label>
+          <label class="check"><input id="set-vad" type="checkbox" /> Skip silent clips (voice-activity gate)</label>
+          <label>Silence threshold (0 - 1, lower is stricter)
+            <input id="set-vad-threshold" type="number" min="0" max="1" step="0.01" />
           </label>
 
           <h3>Screen context</h3>
@@ -101,6 +110,16 @@
             <input id="set-tkey" type="password" autocomplete="off" placeholder="Leave blank to keep stored key" />
           </label>
           <div class="row"><button type="button" id="btn-test-t">Test transcription</button></div>
+          <label>Transcription provider
+            <select id="set-tprovider"><option value="openai">Hosted (OpenAI-compatible)</option><option value="voicestudio">Local VoiceStudio</option></select>
+          </label>
+          <label>VoiceStudio backend URL
+            <input id="set-vs-base" type="text" autocomplete="off" spellcheck="false" placeholder="http://localhost:3900" />
+          </label>
+          <label>VoiceStudio transcription model
+            <input id="set-vs-model" type="text" autocomplete="off" spellcheck="false" placeholder="whisper-1" />
+          </label>
+          <p class="muted">Local VoiceStudio needs no API key — "Test transcription" checks its health endpoint. Hosted fields are ignored while VoiceStudio is selected.</p>
           <label>Chat endpoint
             <input id="set-cbase" type="text" autocomplete="off" spellcheck="false" />
           </label>
@@ -111,15 +130,42 @@
             <input id="set-ckey" type="password" autocomplete="off" placeholder="Leave blank to keep stored key" />
           </label>
           <div class="row"><button type="button" id="btn-test-c">Test chat</button></div>
+          <label class="check"><input id="set-persist-keys" type="checkbox" /> Remember keys on this device (otherwise session-only)</label>
           <p class="muted">Keys can also come from environment variables. They are never written to the repo.</p>
+
+          <h3>Candidate profile</h3>
+          <label class="check"><input id="set-profile-enabled" type="checkbox" /> Ground answers in my profile</label>
+          <label>Display name
+            <input id="set-profile-name" type="text" autocomplete="off" spellcheck="false" placeholder="Ada Lovelace" />
+          </label>
+          <label>Headline
+            <input id="set-profile-headline" type="text" autocomplete="off" spellcheck="false" placeholder="Backend engineer, 6 years" />
+          </label>
+          <label>Résumé facts (one per line)
+            <textarea id="set-profile-facts" rows="4" spellcheck="false" placeholder="Led payments migration at Acme&#10;Cut API latency 40%"></textarea>
+          </label>
+          <label>Key skills (one per line)
+            <textarea id="set-profile-skills" rows="2" spellcheck="false" placeholder="Node.js&#10;PostgreSQL"></textarea>
+          </label>
+          <label>STAR stories (blank line between stories; first line is the title)
+            <textarea id="set-profile-stories" rows="4" spellcheck="false" placeholder="Payments outage&#10;Detected the alert, rolled back, wrote the postmortem"></textarea>
+          </label>
+          <label>Target job description (pasted ad or short summary)
+            <textarea id="set-profile-jd" rows="4" spellcheck="false"></textarea>
+          </label>
+          <p class="muted">Only confirmed facts you enter here are sent with suggestion requests, and only while grounding is enabled. Cards drawn from them are labeled "From your profile".</p>
 
           <h3>Suggestions &amp; data</h3>
           <label>Suggestion mode
             <select id="set-suggest-mode"><option value="manual">Manual</option><option value="auto">Auto</option></select>
           </label>
+          <label>Interview type
+            <input id="set-interview-type" type="text" autocomplete="off" spellcheck="false" placeholder="general" />
+          </label>
           <label>Transcript buffer size (10 - 1000)
             <input id="set-buffer" type="number" min="10" max="1000" step="1" />
           </label>
+          <label class="check"><input id="set-transcript-log" type="checkbox" /> Keep a local transcript log file</label>
 
           <div class="row">
             <button type="submit">Save settings</button>
@@ -130,6 +176,9 @@
       </section>
     </main>
   </div>
+  <script src="../core/audio.js"></script>
+  <script src="../core/screen.js"></script>
+  <script src="../core/suggest.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

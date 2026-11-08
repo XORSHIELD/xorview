@@ -1,8 +1,8 @@
 {
   "name": "xorview",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "XorView v1: original-code Electron overlay assistant (live mic transcription, screen context, AI suggestions).",
+  "description": "XorView v2: original-code Electron overlay assistant (live mic transcription, screen context, AI suggestions).",
   "repository": {
     "type": "git",
     "url": "https://github.com/XORSHIELD/xorview.git"
@@ -13,8 +13,11 @@
     "dev": "electron .",
     "lint": "node scripts/lint.js",
     "build": "node scripts/build.js",
+    "predist": "node scripts/build.js",
     "dist": "electron-builder --publish never",
-    "test": "node --test core/settings.test.js core/providers.test.js core/screen.test.js"
+    "smoke": "node scripts/smoke.js",
+    "make-icon": "node scripts/make-icon.js",
+    "test": "node --test core/settings.test.js core/providers.test.js core/screen.test.js core/audio.test.js core/suggest.test.js core/profile.test.js core/voicestudio.test.js scripts/scripts.test.js test/main.test.js test/renderer.test.js"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -35,9 +38,12 @@
       "renderer/**",
       "core/**",
       "assets/**",
-      "package.json"
+      "package.json",
+      "!**/*.test.js",
+      "!**/.test-tmp-*"
     ],
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",

@@ -23,40 +23,102 @@ const REQUIRED_FILES = [
   'core/providers.js',
   'core/screen.js',
   'core/audio.js',
+  'core/suggest.js',
+  'core/voicestudio.js',
+  'core/profile.js',
+  'scripts/smoke.js',
   'assets/tray.png',
+  'assets/icon.png',
+  'assets/icon.ico',
   '.gitignore',
   'README.md'
 ];
 
-function fail(message) {
-  console.error(`build FAIL: ${message}`);
-  process.exit(1);
-}
-
-const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-if (!pkg.build || !pkg.build.appId || !pkg.build.win) {
-  fail('package.json is missing electron-builder config (build.appId / build.win)');
-}
-const targets = JSON.stringify(pkg.build.win);
-if (!targets.includes('nsis')) {
-  fail('package.json win target must include nsis');
-}
-for (const file of pkg.build.files || []) {
-  if (/(^|\/)\.env/i.test(file) || /secret/i.test(file)) {
-    fail(`packaging config must not bundle secrets (${file})`);
+function readPackageJson() {
+  const full = path.join(ROOT, 'package.json');
+  let raw;
+  try {
+    raw = fs.readFileSync(full, 'utf8');
+  } catch (err) {
+    return { ok: false, error: `cannot read package.json: ${(err && err.message) || err}` };
+  }
+  try {
+    return { ok: true, pkg: JSON.parse(raw) };
+  } catch (err) {
+    return { ok: false, error: `package.json is not valid JSON: ${(err && err.message) || err}` };
   }
 }
 
-for (const rel of REQUIRED_FILES) {
-  if (!fs.existsSync(path.join(ROOT, rel))) {
-    fail(`missing required file ${rel}`);
+/** Validate packaging config; returns failure strings (exported for tests). */
+function validatePackage(pkg) {
+  const failures = [];
+  if (!pkg || typeof pkg !== 'object') {
+    return ['package.json did not parse to an object'];
   }
+  if (!pkg.build || !pkg.build.appId || !pkg.build.win) {
+    failures.push('package.json is missing electron-builder config (build.appId / build.win)');
+    return failures;
+  }
+  const targets = JSON.stringify(pkg.build.win);
+  if (!targets.includes('nsis')) {
+    failures.push('package.json win target must include nsis');
+  }
+  const files = pkg.build.files || [];
+  for (const file of files) {
+    if (/(^|\/)\.env/i.test(file) || /secret/i.test(file)) {
+      failures.push(`packaging config must not bundle secrets (${file})`);
+    }
+  }
+  const joined = files.join('\n');
+  if (!/!\*\*\/\*\.test\.js/.test(joined) && !/!\*\*\/\*.test.js/.test(joined)) {
+    failures.push('packaging config must exclude test files ("!**/*.test.js" in build.files)');
+  }
+  if (!pkg.build.win.icon) {
+    failures.push('package.json win target must configure an installer icon (build.win.icon)');
+  }
+  return failures;
 }
 
-try {
-  execFileSync(process.execPath, [path.join(__dirname, 'lint.js')], { stdio: 'inherit' });
-} catch {
-  fail('lint failed');
+function run() {
+  const failures = [];
+  const read = readPackageJson();
+  if (!read.ok) {
+    console.error(`build FAIL: ${read.error}`);
+    process.exit(1);
+  }
+  failures.push(...validatePackage(read.pkg));
+
+  for (const rel of REQUIRED_FILES) {
+    if (!fs.existsSync(path.join(ROOT, rel))) {
+      failures.push(`missing required file ${rel}`);
+    }
+  }
+
+  for (const failure of failures) {
+    console.error(`build FAIL: ${failure}`);
+  }
+  if (failures.length > 0) {
+    process.exit(1);
+  }
+
+  try {
+    execFileSync(process.execPath, [path.join(__dirname, 'lint.js')], { stdio: 'inherit' });
+  } catch {
+    console.error('build FAIL: lint failed');
+    process.exit(1);
+  }
+
+  console.log('build: OK (packaging config + required files + lint)');
 }
 
-console.log('build: OK (packaging config + required files + lint)');
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  ROOT,
+  REQUIRED_FILES,
+  readPackageJson,
+  validatePackage,
+  run
+};

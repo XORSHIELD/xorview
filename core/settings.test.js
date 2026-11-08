@@ -75,9 +75,9 @@ test('validateSettings rejects bad endpoint, mode, and theme', () => {
 });
 
 test('resolveApiKey prefers settings over env vars', () => {
-  const s = { ...settings.defaults(), transcribeApiKey: 'from-settings', chatApiKey: '' };
+  const s = { ...settings.defaults(), transcribeApiKey: 't1', chatApiKey: '' };
   const env = { XORVIEW_TRANSCRIBE_API_KEY: 'slot', XORVIEW_OPENAI_API_KEY: 'shared' };
-  assert.equal(settings.resolveApiKey('transcribe', s, env), 'from-settings');
+  assert.equal(settings.resolveApiKey('transcribe', s, env), 't1');
   assert.equal(settings.resolveApiKey('chat', s, env), 'shared');
 });
 
@@ -87,4 +87,203 @@ test('resolveApiKey prefers slot env over shared env', () => {
   assert.equal(settings.resolveApiKey('chat', s, env), 'slot');
   assert.equal(settings.hasApiKey('chat', s, env), true);
   assert.equal(settings.hasApiKey('transcribe', s, {}), false);
+});
+
+test('resolveApiKey trims explicit keys and rejects unknown slots', () => {
+  const s = { ...settings.defaults(), chatApiKey: '  k1\n' };
+  assert.equal(settings.resolveApiKey('chat', s, {}), 'k1');
+  assert.equal(settings.resolveApiKey('bogus', s, {}), '');
+  assert.equal(settings.hasApiKey('bogus', s, {}), false);
+  assert.equal(settings.isValidSlot('transcribe'), true);
+  assert.equal(settings.isValidSlot('chat'), true);
+  assert.equal(settings.isValidSlot(''), false);
+});
+
+test('loadSettings sanitizes invalid values back to defaults', () => {
+  const dir = makeTempDir();
+  const bad = { ...settings.defaults(), bufferSize: -5, opacity: 99, clipLengthSec: 999 };
+  fs.writeFileSync(settings.settingsPath(dir), JSON.stringify(bad), 'utf8');
+  const loaded = settings.loadSettings(dir);
+  assert.equal(loaded.bufferSize, settings.DEFAULTS.bufferSize);
+  assert.equal(loaded.opacity, settings.DEFAULTS.opacity);
+  assert.equal(loaded.clipLengthSec, settings.DEFAULTS.clipLengthSec);
+});
+
+test('loadSettingsResult backs up corrupt JSON instead of destroying it', () => {
+  const dir = makeTempDir();
+  fs.writeFileSync(settings.settingsPath(dir), '{ not valid json', 'utf8');
+  const result = settings.loadSettingsResult(dir);
+  assert.equal(result.corrupt, true);
+  assert.ok(result.corruptBackup);
+  assert.ok(fs.existsSync(result.corruptBackup));
+  assert.equal(fs.existsSync(settings.settingsPath(dir)), false);
+  assert.equal(result.settings.hotkey, settings.DEFAULTS.hotkey);
+});
+
+test('mergeSettings honors only known keys (prototype pollution safe)', () => {
+  const current = settings.defaults();
+  const merged = settings.mergeSettings(current, JSON.parse('{"__proto__":{"x":1},"constructor":1,"hotkey":"Ctrl+K"}'));
+  assert.equal(merged.hotkey, 'Ctrl+K');
+  assert.equal(Object.prototype.x, undefined);
+  assert.equal(merged.x, undefined);
+  assert.equal(typeof merged.constructor, 'function');
+});
+
+test('mergeSettings keeps stored keys on empty strings, ignores presence flags', () => {
+  const current = { ...settings.defaults(), transcribeApiKey: 'kept' };
+  const merged = settings.mergeSettings(current, {
+    transcribeApiKey: '',
+    chatApiKey: 'new',
+    hasTranscribeKey: false,
+    hasChatKey: true
+  });
+  assert.equal(merged.transcribeApiKey, 'kept');
+  assert.equal(merged.chatApiKey, 'new');
+  assert.equal(merged.hasTranscribeKey, undefined);
+});
+
+test('saveSettings is session-only by default, persists keys only when opted in', () => {
+  const dir = makeTempDir();
+  const sessionOnly = { ...settings.defaults(), transcribeApiKey: '  t1\n', chatApiKey: 'c1' };
+  assert.equal(settings.saveSettings(dir, sessionOnly).ok, true);
+  const stored = JSON.parse(fs.readFileSync(settings.settingsPath(dir), 'utf8'));
+  assert.equal(stored.transcribeApiKey, '');
+  assert.equal(stored.chatApiKey, '');
+
+  const optedIn = { ...settings.defaults(), persistKeys: true, transcribeApiKey: '  t1\n' };
+  assert.equal(settings.saveSettings(dir, optedIn).ok, true);
+  const stored2 = JSON.parse(fs.readFileSync(settings.settingsPath(dir), 'utf8'));
+  assert.equal(stored2.transcribeApiKey, 't1');
+});
+
+test('validateSettings covers new v2 fields', () => {
+  const bad = {
+    ...settings.defaults(),
+    clipLengthSec: 1,
+    vadThreshold: 2,
+    interviewType: '',
+    startHidden: 'yes',
+    persistKeys: 1,
+    transcriptLogEnabled: 'no'
+  };
+  const result = settings.validateSettings(bad);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.clipLengthSec);
+  assert.ok(result.errors.vadThreshold);
+  assert.ok(result.errors.interviewType);
+  assert.ok(result.errors.startHidden);
+  assert.ok(result.errors.persistKeys);
+  assert.ok(result.errors.transcriptLogEnabled);
+});
+
+test('validateSettings covers VoiceStudio transcription provider fields', () => {
+  const bad = {
+    ...settings.defaults(),
+    transcribeProvider: 'other',
+    voiceStudioBaseUrl: 'not a url',
+    voiceStudioModel: ''
+  };
+  const result = settings.validateSettings(bad);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.transcribeProvider);
+  assert.ok(result.errors.voiceStudioBaseUrl);
+  assert.ok(result.errors.voiceStudioModel);
+
+  const good = {
+    ...settings.defaults(),
+    transcribeProvider: 'voicestudio',
+    voiceStudioBaseUrl: 'http://127.0.0.1:3900/',
+    voiceStudioModel: 'whisper-1'
+  };
+  assert.equal(settings.validateSettings(good).ok, true);
+});
+
+test('loadSettings sanitizes invalid VoiceStudio values back to defaults', () => {
+  const dir = makeTempDir();
+  const bad = { ...settings.defaults(), transcribeProvider: 'bogus', voiceStudioBaseUrl: 'ftp://x' };
+  fs.writeFileSync(settings.settingsPath(dir), JSON.stringify(bad), 'utf8');
+  const loaded = settings.loadSettings(dir);
+  assert.equal(loaded.transcribeProvider, settings.DEFAULTS.transcribeProvider);
+  assert.equal(loaded.voiceStudioBaseUrl, settings.DEFAULTS.voiceStudioBaseUrl);
+});
+
+test('validateSettings covers candidate-profile fields', () => {
+  const bad = {
+    ...settings.defaults(),
+    profileEnabled: 'yes',
+    candidateName: 'x'.repeat(121),
+    candidateHeadline: 'x'.repeat(201),
+    resumeFacts: 'x'.repeat(4001),
+    keySkills: 'x'.repeat(2001),
+    starStories: 'x'.repeat(6001),
+    jobDescription: 'x'.repeat(6001)
+  };
+  const result = settings.validateSettings(bad);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.profileEnabled);
+  assert.ok(result.errors.candidateName);
+  assert.ok(result.errors.candidateHeadline);
+  assert.ok(result.errors.resumeFacts);
+  assert.ok(result.errors.keySkills);
+  assert.ok(result.errors.starStories);
+  assert.ok(result.errors.jobDescription);
+
+  const good = {
+    ...settings.defaults(),
+    profileEnabled: true,
+    candidateName: 'Ada',
+    candidateHeadline: 'Backend engineer',
+    resumeFacts: 'Led billing',
+    keySkills: 'Node.js',
+    starStories: 'Outage\nFixed it.',
+    jobDescription: 'Backend role'
+  };
+  assert.equal(settings.validateSettings(good).ok, true);
+});
+
+test('validateSettings rejects non-string profile text', () => {
+  const bad = { ...settings.defaults(), resumeFacts: ['not a string'] };
+  const result = settings.validateSettings(bad);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.resumeFacts);
+});
+
+test('saveSettings round-trips candidate-profile fields', () => {
+  const dir = makeTempDir();
+  const input = {
+    ...settings.defaults(),
+    profileEnabled: true,
+    candidateName: 'Ada',
+    candidateHeadline: 'Backend engineer',
+    resumeFacts: 'Led billing',
+    keySkills: 'Node.js',
+    starStories: 'Outage\nFixed it.',
+    jobDescription: 'Backend role'
+  };
+  assert.equal(settings.saveSettings(dir, input).ok, true);
+  const loaded = settings.loadSettings(dir);
+  assert.equal(loaded.profileEnabled, true);
+  assert.equal(loaded.candidateName, 'Ada');
+  assert.equal(loaded.starStories, 'Outage\nFixed it.');
+  assert.equal(loaded.jobDescription, 'Backend role');
+});
+
+test('loadSettings sanitizes invalid profile values back to defaults', () => {
+  const dir = makeTempDir();
+  const bad = { ...settings.defaults(), profileEnabled: 'yes', candidateName: 'x'.repeat(500) };
+  fs.writeFileSync(settings.settingsPath(dir), JSON.stringify(bad), 'utf8');
+  const loaded = settings.loadSettings(dir);
+  assert.equal(loaded.profileEnabled, settings.DEFAULTS.profileEnabled);
+  assert.equal(loaded.candidateName, settings.DEFAULTS.candidateName);
+});
+
+test('mergeSettings honors profile keys', () => {
+  const merged = settings.mergeSettings(settings.defaults(), {
+    profileEnabled: true,
+    candidateName: 'Ada',
+    jobDescription: 'Backend role'
+  });
+  assert.equal(merged.profileEnabled, true);
+  assert.equal(merged.candidateName, 'Ada');
+  assert.equal(merged.jobDescription, 'Backend role');
 });
