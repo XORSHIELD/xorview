@@ -190,7 +190,7 @@ xorview/
    - User-remappable in settings; persisted and validated.
    - Tray menu Show/Hide always works as a fallback.
 3. Tray app.
-   - Tray icon + menu: Show/Hide, Start/Pause, Capture now, Click-through on/off, Settings, Quit.
+   - Tray icon + menu: Show/Hide, Start/Pause, Capture now, Click-through on/off, Settings, Quit. A Quit button in the titlebar mirrors tray Quit.
    - No taskbar presence for the overlay window.
 4. Mic transcription (smarter).
    - Capture default (or selected) microphone; bounded in-memory buffer + optional local log file.
@@ -231,7 +231,7 @@ In scope:
 - Tray-based presence with no taskbar entry for the overlay (`skipTaskbar`, tool-window type, Alt+Tab exclusion verified on target Windows build).
 - Focus behavior: `focusable:false` by default, `showInactive()` on show, optional start-hidden.
 - Discreet window title and neutral `productName`/`executableName` (installer gets a real icon, not the Electron default — fixes defect 13).
-- Click-through toggle with a tray escape hatch.
+- Click-through toggle with a tray escape hatch. Showing the overlay re-enables mouse input automatically, so the window can never get stuck unclickable.
 
 Explicitly out of scope (do not implement):
 

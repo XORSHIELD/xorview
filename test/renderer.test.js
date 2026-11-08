@@ -226,6 +226,7 @@ async function setup(overrides = {}) {
     suggest: 0,
     transcribe: 0,
     uploadCv: [],
+    quit: 0,
     appended: []
   };
   const bridgeListeners = {};
@@ -268,6 +269,10 @@ async function setup(overrides = {}) {
     },
     loadTranscript: async () => ({ ok: true, segments: overrides.logSegments || [] }),
     toggle: async () => ({ ok: true }),
+    quit: async () => {
+      calls.quit += 1;
+      return { ok: true };
+    },
     on: (channel, cb) => {
       bridgeListeners[channel] = bridgeListeners[channel] || [];
       bridgeListeners[channel].push(cb);
@@ -672,4 +677,11 @@ test('CV upload errors render inline without touching fields', async () => {
   assert.equal(ctx.els['set-profile-name'].value, 'Typed');
   assert.equal(ctx.els['set-cv-name'].value, '');
   assert.match(ctx.els['cv-state'].textContent, /No readable text/);
+});
+
+test('Quit button asks main to quit', async () => {
+  const ctx = await setup();
+  ctx.els['btn-quit'].click();
+  await ctx.flush();
+  assert.equal(ctx.calls.quit, 1);
 });

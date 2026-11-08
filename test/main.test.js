@@ -519,3 +519,23 @@ test('cv-upload surfaces parse errors with codes', async () => {
   assert.equal(res.ok, false);
   assert.equal(res.error.code, 'bad-request');
 });
+
+test('showing the overlay clears click-through so it stays interactive', async () => {
+  await main.init();
+  const win = main.__test__.getWindow();
+  await stub.handlers['xorview:set-click-through']({}, true);
+  assert.equal(main.__test__.getClickThrough(), true);
+  win.hide();
+  await stub.handlers['xorview:toggle']({});
+  assert.equal(win.isVisible(), true);
+  assert.equal(main.__test__.getClickThrough(), false);
+  assert.ok(win.calls.some(([name, ...args]) => name === 'setIgnoreMouseEvents' && args[0] === false));
+  assert.ok(stub.sent.some(([ch, value]) => ch === 'xorview:click-through-change' && value === false));
+});
+
+test('quit handler flags quitting and quits the app', async () => {
+  await main.init();
+  const res = await stub.handlers['xorview:quit']({});
+  assert.equal(res.ok, true);
+  assert.equal(stub.quitCalled, true);
+});

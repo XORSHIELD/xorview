@@ -756,6 +756,9 @@
       }
       void bridge.toggle();
     });
+    $('btn-quit').addEventListener('click', () => {
+      if (bridge && typeof bridge.quit === 'function') void bridge.quit();
+    });
     $('btn-click').addEventListener('click', async () => {
       const next = !state.clickThrough;
       setClickThroughUI(next);

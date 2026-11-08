@@ -155,6 +155,8 @@ function createWindow() {
 /** Show without stealing focus from the interview app. */
 function showOverlay() {
   if (!win || win.isDestroyed()) return;
+  // Showing means intent to interact: never leave the overlay unclickable.
+  if (clickThrough) setClickThrough(false);
   if (typeof win.showInactive === 'function') win.showInactive();
   else win.show();
 }
@@ -162,6 +164,7 @@ function showOverlay() {
 /** Enable keyboard input (for the settings form) then show normally. */
 function showOverlayForInput() {
   if (!win || win.isDestroyed()) return;
+  if (clickThrough) setClickThrough(false);
   if (typeof win.setFocusable === 'function') win.setFocusable(true);
   win.show();
 }
@@ -576,6 +579,12 @@ function setupIpc() {
 
   ipcMain.handle('xorview:toggle', () => {
     toggleOverlay();
+    return { ok: true };
+  });
+
+  ipcMain.handle('xorview:quit', () => {
+    quitting = true;
+    app.quit();
     return { ok: true };
   });
 }

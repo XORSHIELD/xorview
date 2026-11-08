@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('xorview', {
   appendTranscript: (text) => ipcRenderer.invoke('xorview:transcript-append', { text }),
   loadTranscript: (limit) => ipcRenderer.invoke('xorview:transcript-load', { limit }),
   toggle: () => ipcRenderer.invoke('xorview:toggle'),
+  quit: () => ipcRenderer.invoke('xorview:quit'),
   on: (channel, callback) => {
     if (!RECEIVE_CHANNELS.includes(channel) || typeof callback !== 'function') {
       return () => {};

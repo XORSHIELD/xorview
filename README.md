@@ -16,7 +16,9 @@ Full build spec: [SPEC.md](SPEC.md).
   inline errors that never yank tabs).
 - Tray menu: Show/Hide, Start/Pause listening, Capture now, Click-through
   on/off (escape hatch), Settings, Quit. Capture failures raise a tray
-  balloon plus a gap marker — never silent.
+  balloon plus a gap marker — never silent. Showing the overlay always
+  turns click-through back off, and a Quit button in the titlebar exits
+  fully.
 - Mic transcription via a configurable OpenAI-compatible endpoint: upload
   queue with visible depth (no silent drops), voice-activity gate that
   skips silent clips, configurable clip length, mime-matched upload
