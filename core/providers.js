@@ -1,16 +1,33 @@
 'use strict';
 
 /**
- * core/providers.js — OpenAI-compatible transcription + chat clients.
+ * core/providers.js — OpenAI-compatible transcription + chat clients (v2).
  *
  * Runs in the main process. Uses injected fetch (default: global fetch)
- * with timeout + bounded retries. Errors are coded objects:
+ * with timeout + bounded retries with exponential backoff + jitter.
+ * Errors are coded objects:
  *   missing-key | auth | bad-request | network | timeout | provider
  * Key material is never logged or included in error messages.
  */
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_RETRIES = 2;
+const DEFAULT_BACKOFF_BASE_MS = 250;
+const DEFAULT_BACKOFF_MAX_MS = 4000;
+
+/** Valid provider slots. */
+const VALID_SLOTS = Object.freeze(['transcribe', 'chat']);
+
+function isValidSlot(slot) {
+  return slot === 'transcribe' || slot === 'chat';
+}
+
+function assertSlot(slot) {
+  if (!isValidSlot(slot)) {
+    throw providerError('bad-request', `Unknown provider slot: ${String(slot)}`);
+  }
+  return slot;
+}
 
 function providerError(code, message) {
   const err = new Error(message);
@@ -19,7 +36,21 @@ function providerError(code, message) {
 }
 
 function joinUrl(baseUrl, suffix) {
-  return baseUrl.replace(/\/+$/, '') + suffix;
+  return String(baseUrl).replace(/\/+$/, '') + suffix;
+}
+
+/**
+ * Map a recorder mime type to the upload filename. Providers use the file
+ * extension for format detection, so this must match the actual container.
+ */
+function filenameForMime(mimeType) {
+  const mime = String(mimeType || '').toLowerCase().split(';')[0].trim();
+  if (mime === 'audio/mp4' || mime === 'audio/x-m4a' || mime === 'audio/aac') return 'clip.mp4';
+  if (mime === 'audio/wav' || mime === 'audio/x-wav' || mime === 'audio/wave') return 'clip.wav';
+  if (mime === 'audio/mpeg' || mime === 'audio/mp3') return 'clip.mp3';
+  if (mime === 'audio/ogg' || mime === 'audio/opus') return 'clip.ogg';
+  if (mime === 'audio/flac') return 'clip.flac';
+  return 'clip.webm';
 }
 
 async function readErrorMessage(res) {
@@ -32,6 +63,15 @@ async function readErrorMessage(res) {
     // Fall through to generic message.
   }
   return `Request failed with HTTP ${res.status}`;
+}
+
+/** Parse a successful JSON body; non-JSON 200s become coded provider errors. */
+async function readSuccessJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    throw providerError('provider', `Unexpected non-JSON response (HTTP ${res.status}).`);
+  }
 }
 
 function mapStatusToError(status, message) {
@@ -67,11 +107,35 @@ async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
   }
 }
 
+function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * Run fn with up to MAX_RETRIES retries on retryable failures
- * (network errors, timeouts, HTTP 429/5xx).
+ * Exponential backoff with jitter for attempt N (1-based): base * 2^(N-1)
+ * capped at maxMs, plus uniform jitter up to 25%.
  */
-async function withRetry(fn, maxRetries = MAX_RETRIES) {
+function backoffDelayMs(attempt, baseMs = DEFAULT_BACKOFF_BASE_MS, maxMs = DEFAULT_BACKOFF_MAX_MS, randomFn = Math.random) {
+  const exp = Math.min(maxMs, baseMs * 2 ** Math.max(0, attempt - 1));
+  const rand = typeof randomFn === 'function' ? randomFn() : 0.5;
+  return Math.round(exp * (1 + rand * 0.25));
+}
+
+/**
+ * Run fn with bounded retries on retryable failures (network errors,
+ * timeouts, HTTP 429/5xx), waiting with exponential backoff + jitter
+ * between attempts.
+ *
+ * Second arg may be a retry count (legacy) or an options object:
+ *   { maxRetries, baseMs, maxMs, sleep, random }
+ * `sleep` and `random` are injectable for deterministic unit tests.
+ */
+async function withRetry(fn, maxRetriesOrOptions = MAX_RETRIES) {
+  const opts = typeof maxRetriesOrOptions === 'object' && maxRetriesOrOptions !== null
+    ? maxRetriesOrOptions
+    : { maxRetries: maxRetriesOrOptions };
+  const maxRetries = opts.maxRetries !== undefined ? opts.maxRetries : MAX_RETRIES;
+  const sleep = typeof opts.sleep === 'function' ? opts.sleep : defaultSleep;
   let attempt = 0;
   for (;;) {
     try {
@@ -86,6 +150,7 @@ async function withRetry(fn, maxRetries = MAX_RETRIES) {
         throw err;
       }
       attempt += 1;
+      await sleep(backoffDelayMs(attempt, opts.baseMs, opts.maxMs, opts.random));
     }
   }
 }
@@ -98,9 +163,10 @@ async function transcribeAudio({
   mimeType = 'audio/webm',
   language = '',
   fetchImpl = globalThis.fetch,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  retryOptions = undefined
 }) {
-  if (!apiKey || apiKey.trim() === '') {
+  if (!apiKey || String(apiKey).trim() === '') {
     throw providerError('missing-key', 'No transcription API key configured.');
   }
   if (!audioBuffer || audioBuffer.length === 0) {
@@ -109,9 +175,9 @@ async function transcribeAudio({
   const url = joinUrl(baseUrl, '/audio/transcriptions');
   const form = new FormData();
   const blob = new Blob([audioBuffer], { type: mimeType });
-  form.append('file', blob, 'clip.webm');
+  form.append('file', blob, filenameForMime(mimeType));
   form.append('model', model);
-  if (language && language.trim() !== '') form.append('language', language.trim());
+  if (language && String(language).trim() !== '') form.append('language', String(language).trim());
 
   return withRetry(async () => {
     const res = await fetchWithTimeout(
@@ -125,10 +191,10 @@ async function transcribeAudio({
       if (isRetryableStatus(res.status)) throw providerError('retryable-status', message);
       throw mapStatusToError(res.status, message);
     }
-    const body = await res.json();
+    const body = await readSuccessJson(res);
     const text = body && typeof body.text === 'string' ? body.text.trim() : '';
     return { text };
-  });
+  }, retryOptions !== undefined ? retryOptions : MAX_RETRIES);
 }
 
 async function chatCompletion({
@@ -139,9 +205,10 @@ async function chatCompletion({
   maxTokens = 800,
   temperature = 0.3,
   fetchImpl = globalThis.fetch,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  retryOptions = undefined
 }) {
-  if (!apiKey || apiKey.trim() === '') {
+  if (!apiKey || String(apiKey).trim() === '') {
     throw providerError('missing-key', 'No chat API key configured.');
   }
   const url = joinUrl(baseUrl, '/chat/completions');
@@ -163,21 +230,21 @@ async function chatCompletion({
       if (isRetryableStatus(res.status)) throw providerError('retryable-status', message);
       throw mapStatusToError(res.status, message);
     }
-    const body = await res.json();
+    const body = await readSuccessJson(res);
     const content =
       body && body.choices && body.choices[0] && body.choices[0].message
         ? String(body.choices[0].message.content || '').trim()
         : '';
     return { text: content };
-  });
+  }, retryOptions !== undefined ? retryOptions : MAX_RETRIES);
 }
 
 /**
  * Lightweight connectivity check: authenticated GET /models.
  * Never sends key material anywhere except the Authorization header.
  */
-async function testConnection({ baseUrl, apiKey, fetchImpl = globalThis.fetch, timeoutMs = 15000 }) {
-  if (!apiKey || apiKey.trim() === '') {
+async function testConnection({ baseUrl, apiKey, fetchImpl = globalThis.fetch, timeoutMs = 15000, retryOptions = undefined }) {
+  if (!apiKey || String(apiKey).trim() === '') {
     throw providerError('missing-key', 'No API key configured.');
   }
   const url = joinUrl(baseUrl, '/models');
@@ -194,12 +261,20 @@ async function testConnection({ baseUrl, apiKey, fetchImpl = globalThis.fetch, t
       throw mapStatusToError(res.status, message);
     }
     return { ok: true };
-  });
+  }, retryOptions !== undefined ? retryOptions : MAX_RETRIES);
 }
 
 module.exports = {
   DEFAULT_TIMEOUT_MS,
   MAX_RETRIES,
+  DEFAULT_BACKOFF_BASE_MS,
+  DEFAULT_BACKOFF_MAX_MS,
+  VALID_SLOTS,
+  isValidSlot,
+  assertSlot,
+  filenameForMime,
+  backoffDelayMs,
+  withRetry,
   transcribeAudio,
   chatCompletion,
   testConnection

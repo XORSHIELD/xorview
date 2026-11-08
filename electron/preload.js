@@ -1,21 +1,22 @@
 'use strict';
 
 /**
- * electron/preload.js — minimal safe IPC bridge.
+ * electron/preload.js — minimal safe IPC bridge (v2).
  *
  * contextIsolation stays on and Node stays off in the renderer; the UI can
  * only use the explicit invoke/on surface below. No raw ipcRenderer access.
+ * Every receive channel here has a live main-side emitter (no dead surface).
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
 
 const RECEIVE_CHANNELS = Object.freeze([
-  'xorview:transcript',
   'xorview:context',
-  'xorview:suggestion',
+  'xorview:capture-gap',
   'xorview:listening-change',
   'xorview:open-settings',
-  'xorview:hotkey-error'
+  'xorview:hotkey-error',
+  'xorview:click-through-change'
 ]);
 
 contextBridge.exposeInMainWorld('xorview', {
@@ -27,6 +28,9 @@ contextBridge.exposeInMainWorld('xorview', {
   captureNow: () => ipcRenderer.invoke('xorview:capture-now'),
   setListening: (on) => ipcRenderer.invoke('xorview:set-listening', on),
   setClickThrough: (on) => ipcRenderer.invoke('xorview:set-click-through', on),
+  setFocusable: (on) => ipcRenderer.invoke('xorview:set-focusable', on),
+  appendTranscript: (text) => ipcRenderer.invoke('xorview:transcript-append', { text }),
+  loadTranscript: (limit) => ipcRenderer.invoke('xorview:transcript-load', { limit }),
   toggle: () => ipcRenderer.invoke('xorview:toggle'),
   on: (channel, callback) => {
     if (!RECEIVE_CHANNELS.includes(channel) || typeof callback !== 'function') {

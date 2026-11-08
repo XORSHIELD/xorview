@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * scripts/make-icon.js — generates XorView's original tray icon (a teal
- * rounded square with a white "X") as a plain PNG. No external assets.
+ * scripts/make-icon.js — generates XorView's original icons (a teal rounded
+ * square with a white "X") as plain PNGs plus a multi-size ICO. No external
+ * assets. Side effects happen only via main() under require.main.
  */
 
 const fs = require('fs');
@@ -69,8 +70,65 @@ function makePng(size) {
   ]);
 }
 
-const outDir = path.join(__dirname, '..', 'assets');
-fs.mkdirSync(outDir, { recursive: true });
-const outFile = path.join(outDir, 'tray.png');
-fs.writeFileSync(outFile, makePng(32));
-console.log(`icon: wrote ${outFile} (${fs.statSync(outFile).size} bytes)`);
+/**
+ * Pack PNG buffers into a multi-image ICO (Vista+ PNG-compressed entries).
+ * @param {{ size: number, png: Buffer }[]} images
+ */
+function makeIco(images) {
+  const count = images.length;
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(count, 4);
+  const dirSize = 16 * count;
+  let offset = 6 + dirSize;
+  const entries = [];
+  const blobs = [];
+  for (const { size, png } of images) {
+    const entry = Buffer.alloc(16);
+    entry[0] = size >= 256 ? 0 : size;
+    entry[1] = size >= 256 ? 0 : size;
+    entry[2] = 0; // palette colors
+    entry[3] = 0; // reserved
+    entry.writeUInt16LE(1, 4); // planes
+    entry.writeUInt16LE(32, 6); // bit depth
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += png.length;
+    entries.push(entry);
+    blobs.push(png);
+  }
+  return Buffer.concat([header, ...entries, ...blobs]);
+}
+
+function main(outDir) {
+  const dir = outDir || path.join(__dirname, '..', 'assets');
+  fs.mkdirSync(dir, { recursive: true });
+  const written = [];
+  const trayFile = path.join(dir, 'tray.png');
+  fs.writeFileSync(trayFile, makePng(32));
+  written.push(trayFile);
+  const iconPng = path.join(dir, 'icon.png');
+  fs.writeFileSync(iconPng, makePng(256));
+  written.push(iconPng);
+  const icoFile = path.join(dir, 'icon.ico');
+  fs.writeFileSync(
+    icoFile,
+    makeIco([16, 32, 48, 256].map((size) => ({ size, png: makePng(size) })))
+  );
+  written.push(icoFile);
+  for (const file of written) {
+    console.log(`icon: wrote ${file} (${fs.statSync(file).size} bytes)`);
+  }
+  return written;
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  makePng,
+  makeIco,
+  main
+};

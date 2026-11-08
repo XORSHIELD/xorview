@@ -21,3 +21,5 @@ xorview-settings.json
 # Local scratch: verification probes, caches, temp downloads (never committed)
 .tmp/
 .npm-cache/
+.electron-cache/
+.electron-builder-cache/
